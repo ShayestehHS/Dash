@@ -36,4 +36,8 @@ Thumbs.db
 /bin/
 /dist/
 
+# Project-specific directories
+.cursor/
+scripts/
+pkg/pagination/
 

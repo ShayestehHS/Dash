@@ -11,7 +11,8 @@ This project follows **Hexagonal Architecture** (Ports and Adapters) and **Domai
 ```
 Dash/
 ├── cmd/
-│   └── api/                    # Application entry point
+│   ├── api/                    # Application entry point
+│   └── migrate/                # Migration command-line tool
 │
 ├── core/                       # Business logic (Domain layer)
 │   └── user/                   # User domain
@@ -21,10 +22,9 @@ Dash/
 │
 ├── db/                         # Database layer (adapter)
 │   └── repository/            # Repository implementations
-│       ├── postgresql/        # PostgreSQL-specific code
-│       │   └── migrations/    # Database migrations
 │       └── user/
 │           └── postgresql/
+│               ├── migrations/ # Database migrations
 │               └── repository.go
 │
 ├── pkg/                        # Public packages
@@ -33,22 +33,55 @@ Dash/
 │   ├── logger/                # Structured logging
 │   └── middleware/            # HTTP middleware
 │
-├── internal/                   # Internal packages
-│   ├── api/                   # HTTP layer (adapter)
-│   │   └── user/
-│   │       ├── handler.go
-│   │       └── dto.go
-│   ├── database/              # Database connection
-│   └── router/                # Route setup
-│
-└── shared/                     # Shared utilities (future)
+└── internal/                   # Internal packages
+    ├── api/                   # HTTP layer (adapter)
+    │   └── user/
+    │       ├── handler.go
+    │       └── dto.go
+    ├── database/              # Database connection
+    └── router/                # Route setup
 ```
 
 ## Current Features
 
 ### Authentication
 - **User Login**: Phone number-based authentication with password hashing
-- **JWT Tokens**: Secure token-based authentication
+- **JWT Tokens**: Secure token-based authentication with access and refresh tokens
+
+### API Endpoints
+
+All API endpoints end with a trailing slash (`/`) and return `405 Method Not Allowed` for unsupported HTTP methods.
+
+- `GET /api/health/` - Health check endpoint
+- `POST /api/user/auth/login/` - User login endpoint
+
+#### Login Request
+```json
+{
+  "phone": "+998901234567",
+  "password": "your_password"
+}
+```
+
+#### Login Response
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+#### Validation Errors
+When validation fails, the API returns field-specific error messages:
+```json
+{
+  "error": "validation_error",
+  "fields": {
+    "phone": "This field is required",
+    "password": "This field is required"
+  }
+}
+```
 
 ## Future Domain Entities
 
@@ -93,16 +126,20 @@ cd Dash
 go mod download
 ```
 
-3. Set up environment variables:
+3. Set up environment variables (all are optional with defaults):
 ```bash
-export DB_HOST=localhost
-export DB_PORT=5432
-export DB_USER=postgres
-export DB_PASSWORD=your_password
-export DB_NAME=dash
-export JWT_SECRET=your-secret-key-change-in-production
-export PORT=8080
+export DB_HOST=localhost          # Default: localhost
+export DB_PORT=5432               # Default: 5432
+export DB_USER=dash               # Default: dash
+export DB_PASSWORD=dash           # Default: dash
+export DB_NAME=dash              # Default: dash
+export DB_SSLMODE=disable        # Default: disable
+export JWT_SECRET=your-secret-key-change-in-production  # Required
+export CORS_ALLOW_ORIGIN=*       # Default: *
+export PORT=8080                 # Default: 8080
 ```
+
+**Note**: The default database credentials are `dash/dash` for local development. Make sure to set proper credentials in production.
 
 4. Run database migrations:
 ```bash
@@ -191,8 +228,18 @@ go run cmd/api/main.go
 
 ### Database
 - Use Squirrel for query building
-- All migrations in `db/repository/postgresql/migrations/`
+- All migrations in `db/repository/{domain}/postgresql/migrations/`
 - Repository implementations in `db/repository/{domain}/postgresql/`
-- Use PostgreSQL-specific features (UUIDv7 for improved indexing and performance.)
+- Use PostgreSQL-specific features:
+  - **UUIDv7** for primary keys (improved indexing and performance)
+  - **TIMESTAMP WITH TIME ZONE** for all timestamp columns
+  - **Automatic `updated_at` triggers** for timestamp updates
+
+### API Conventions
+- All endpoints must end with a trailing slash (`/`)
+- Unsupported HTTP methods return `405 Method Not Allowed`
+- Validation errors return field-specific messages
+- Structured JSON logging with file and line numbers
+- Error codes follow `FunctionName:Code` format
 
 
